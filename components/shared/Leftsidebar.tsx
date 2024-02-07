@@ -32,6 +32,7 @@ const Leftsidebar = () => {
                 alt={link.label}
                 width={24}
                 height={24}
+                className="object-contain"
               />
               <p className="text-light-1 max-lg:hidden">{link.label}</p>
             </Link>
