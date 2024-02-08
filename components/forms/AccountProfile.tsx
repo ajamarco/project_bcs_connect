@@ -1,7 +1,7 @@
 "use client";
 //import libraries
 import Image from "next/image";
-import { ChangeEvent } from "react";
+import { ChangeEvent, useState } from "react";
 
 //import components
 import { useForm } from "react-hook-form";
@@ -20,6 +20,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { UserValidation } from "@/lib/validations/user";
 import { z } from "zod";
 import { Textarea } from "../ui/textarea";
+import { isBase64Image } from "@/lib/utils";
+import { useUploadThing } from "@/lib/uploadthing";
 
 interface Props {
   user: {
@@ -34,28 +36,45 @@ interface Props {
 }
 
 const AccountProfile = ({ user, btnTitle }: Props) => {
+  const [files, setFiles] = useState<File[]>([]);
+  const { startUpload } = useUploadThing("media");
+
   const form = useForm({
     resolver: zodResolver(UserValidation),
     defaultValues: {
-      profile_photo: "",
-      name: "",
-      username: "",
-      bio: "",
+      profile_photo: user?.image || "",
+      name: user?.name || "",
+      username: user?.username || "",
+      bio: user?.bio || "",
     },
   });
 
   const handleImageChange = (
-    e: ChangeEvent,
+    e: ChangeEvent<HTMLInputElement>,
     fieldChange: (value: string) => void
   ) => {
     e.preventDefault();
+    const fileReader = new FileReader();
+
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setFiles(Array.from(e.target.files));
+
+      if (!file.type.includes("image")) return;
+
+      fileReader.onload = async (ev) => {
+        const imageDataURL = ev.target?.result?.toString() || "";
+        fieldChange(imageDataURL);
+      };
+      fileReader.readAsDataURL(file);
+    }
   };
 
-  const renderPicture = (hasPicture: boolean) => {
-    if (hasPicture) {
+  const renderPicture = (imageSrc: string) => {
+    if (imageSrc) {
       return (
         <Image
-          src={user.image}
+          src={imageSrc}
           alt="profile photo"
           width={96}
           height={96}
@@ -76,11 +95,22 @@ const AccountProfile = ({ user, btnTitle }: Props) => {
     }
   };
 
-  function onSubmit(values: z.infer<typeof UserValidation>) {
-    // Do something with the form values.
-    // ✅ This will be type-safe and validated.
-    console.log(values);
+  async function onSubmit(values: z.infer<typeof UserValidation>) {
+    const blob = values.profile_photo;
+
+    const hasImageChanged = isBase64Image(blob);
+
+    if (hasImageChanged) {
+      const imgRes = await startUpload(files);
+
+      if (imgRes && imgRes[0].url) {
+        values.profile_photo = imgRes[0].url;
+      }
+    }
+
+    //TODO: update user profile
   }
+
   //we will be using a library called shadcn to style the form
   return (
     <Form {...form}>
@@ -95,7 +125,7 @@ const AccountProfile = ({ user, btnTitle }: Props) => {
           render={({ field }) => (
             <FormItem className="flex items-center gap-4">
               <FormLabel className="account-form_image-label">
-                {renderPicture(!!field.value)}
+                {renderPicture(field.value)}
               </FormLabel>
               <FormControl className="flex-1 text-base-semiboldl text-gray-200">
                 <Input
